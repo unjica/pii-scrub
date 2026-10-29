@@ -93,3 +93,12 @@ describe("false positives (default detectors)", () => {
     expect(createScrubber().value(payload)).toEqual(payload);
   });
 });
+
+describe("bearer: short letters-only values (documented trade-off)", () => {
+  it("keeps short alphabetic values in free text but redacts full Authorization headers", () => {
+    expect(scrubText("missing Bearer token")).toBe("missing Bearer token");
+    expect(scrubText("got Bearer iXybow")).toBe("got Bearer iXybow");
+    expect(scrubText("Authorization: Bearer iXybow")).toBe("Authorization: [bearer-token]");
+    expect(scrubText("Bearer abcdefghijklmnopqrstuv")).toBe("[bearer-token]");
+  });
+});

@@ -150,6 +150,9 @@ Also exported: `passesLuhn`, `isValidIban`, `isValidIpv4`, `isValidIpv6`, `BUILT
 
 ## Recipes
 
+A runnable example covering text, objects, errors and custom detectors is in [`examples/basic.mjs`](examples/basic.mjs).
+
+
 **pino** – scrub the whole log object:
 
 ```ts
@@ -184,6 +187,7 @@ This library is a **best-effort, pattern-based filter**. Treat it as one layer o
 - **Only the formats listed above.** Not detected: national ID numbers (SSN/EMŠO/etc.) in free text (only under the `ssn` key), passport and driving-licence numbers, tax/VAT numbers, licence plates, lowercase or unusual IBAN formats, bank account numbers that are not IBANs, card numbers with unusual separators or split across fields, phone numbers without a `+` country code that are not NANP-formatted (e.g. `040 123 456`), API keys of vendors not listed, passwords that appear without a recognisable key name, private keys/PEM blocks, MAC addresses, geolocation, device IDs.
 - **IP addresses are off by default** (they are personal data under GDPR, but matching them by default would break version strings like `1.2.3.4`). Enable `ipv4`/`ipv6` if you need them.
 - **False positives are possible**, e.g. a 16-digit order number that happens to pass Luhn, `+1500000` read as a phone number, or a NANP-like `123 456 7890`. Placeholders are typed so you can see what happened.
+- **Short, letters-only bearer tokens are kept on purpose.** The free-text `bearer` detector only redacts `Bearer <value>` when the value contains a digit or one of `._~+/=-`, or is at least 20 characters long. This keeps prose such as `missing Bearer token` or `Bearer header` intact. The trade-off: a short purely alphabetic token like `Bearer iXybow` in free text is **not** redacted. Real-world tokens (JWTs, opaque base64/hex tokens) are long or contain digits/punctuation. A full `Authorization:` header line is still fully redacted by `authorizationHeader`, regardless of the token shape, and so is any value under an `authorization` object key.
 - **False negatives are possible**: secrets glued to other characters (`x4111111111111111`), obfuscated or encoded data (base64, URL-encoded, hex, split across log lines), and values in numeric fields that are not under a sensitive key (numbers are never pattern-matched).
 - **Structure-aware only for JS values.** Serialized JSON inside strings is treated as text (`jsonSecret` covers the common `"password": "…"` case). Binary data (`Buffer`, typed arrays) is returned unchanged and not inspected.
 - **Class instances lose their prototype** (they become plain objects); `Error`s keep theirs. Getters on plain objects are invoked; a throwing getter becomes `[redacted]`. Symbol-keyed and non-enumerable properties of non-Error objects are dropped.
