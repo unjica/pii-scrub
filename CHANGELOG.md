@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.2] - 2026-10-30
 
 ### Added
 
@@ -22,6 +22,10 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Changed
 
 - Output for `scheme://user:pass@host` URLs changes from `scheme://user:[email]…` to `scheme://[redacted]@host`. Error fingerprints computed after scrubbing may change for messages that contain URL credentials, `X-Api-Key`/`X-…-Token` headers, `aws_secret_access_key=`, or short space-separated number groups.
+
+### Security (development dependencies only)
+
+- Dev tooling updated to clear all 6 Dependabot alerts (#3): `vitest` 3 → 5 (drops the vulnerable `tinypool`), `esbuild` overridden to `^0.28.1`. These packages are not shipped; the published package still has no runtime dependencies and still supports Node >= 18. Running the test suite now officially needs Node ^22.12 || >=24 (vitest 5).
 
 ## [0.1.1] - 2026-10-30
 
@@ -47,5 +51,6 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - The free-text `bearer` detector intentionally ignores short, letters-only values (for example `Bearer token` in prose) to reduce false positives. Full `Authorization:` header lines and `authorization` object keys are still always redacted. See "Limitations" in the README.
 
+[0.1.2]: https://github.com/unjica/pii-scrub/releases/tag/v0.1.2
 [0.1.1]: https://github.com/unjica/pii-scrub/releases/tag/v0.1.1
 [0.1.0]: https://github.com/unjica/pii-scrub/releases/tag/v0.1.0
