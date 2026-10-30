@@ -93,8 +93,17 @@ function positiveInt(value: number | undefined, fallback: number, name: string):
 /** Create a reusable scrubber. Compiling options once is cheaper than passing them on every call. */
 export function createScrubber(options: ScrubOptions = {}): Scrubber {
   const placeholders: Placeholders = { ...DEFAULT_PLACEHOLDERS, ...options.placeholders };
-  const maxDepth = positiveInt(options.maxDepth, DEFAULT_MAX_DEPTH, "maxDepth");
-  const maxNodes = positiveInt(options.maxNodes, DEFAULT_MAX_NODES, "maxNodes");
+  let maxDepth = positiveInt(options.maxDepth, DEFAULT_MAX_DEPTH, "maxDepth");
+  let maxNodes = positiveInt(options.maxNodes, DEFAULT_MAX_NODES, "maxNodes");
+  const onLimit = options.onLimit ?? "truncate";
+  if (onLimit !== "truncate" && onLimit !== "scrub") {
+    throw new TypeError('pii-scrub: onLimit must be "truncate" or "scrub"');
+  }
+  if (onLimit === "scrub") {
+    // Soft limits: keep scrubbing past maxDepth/maxNodes, but never past the hard caps.
+    maxDepth = Math.max(maxDepth, positiveInt(options.hardMaxDepth, 128, "hardMaxDepth"));
+    maxNodes = Math.max(maxNodes, positiveInt(options.hardMaxNodes, 10_000, "hardMaxNodes"));
+  }
   const cfg = {
     placeholders,
     secretNames: options.secretNames ?? DEFAULT_SECRET_NAMES,
