@@ -3,3 +3,4 @@ dist
 *.tgz
 coverage
 QA-SUMMARY.md
+MAINTENANCE.md

@@ -1,5 +1,7 @@
 # @tacko/pii-scrub
 
+[![npm version](https://img.shields.io/npm/v/@tacko/pii-scrub.svg)](https://www.npmjs.com/package/@tacko/pii-scrub) [![license: MIT](https://img.shields.io/npm/l/@tacko/pii-scrub.svg)](LICENSE)
+
 Zero-dependency, best-effort scrubbing of personal data and secrets from **logs, telemetry payloads and `Error` objects**.
 
 - **Typed placeholders** (`[email]`, `[card]`, `[api-key]`, …) instead of a generic `[REDACTED]`, so scrubbed logs stay debuggable.
