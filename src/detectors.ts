@@ -18,6 +18,7 @@ export interface DetectorConfig {
 }
 
 export const BUILT_IN_DETECTORS: readonly BuiltInDetectorName[] = [
+  "urlCredentials",
   "email",
   "jwt",
   "bearer",
@@ -32,6 +33,7 @@ export const BUILT_IN_DETECTORS: readonly BuiltInDetectorName[] = [
   "jsonSecret",
   "cookieHeader",
   "authorizationHeader",
+  "secretHeader",
   "urlQuery",
   "contextId",
 ];
@@ -48,6 +50,7 @@ export const DEFAULT_SECRET_NAMES: readonly string[] = [
   "refresh_token",
   "id_token",
   "api_key",
+  "aws_secret_access_key",
   "auth",
   "session",
   "cookie",
@@ -98,8 +101,9 @@ const API_KEY_RE = new RegExp(
   "g",
 );
 const IBAN_RE = /(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}(?![A-Za-z0-9])/g;
-// A whole run of digit groups separated by 1–3 spaces/dashes; card spans are picked inside it.
-const CARD_RE = /(?<![A-Za-z0-9])\d+(?:[ -]{1,3}\d+)*(?![A-Za-z0-9])/g;
+// A whole run of digit groups separated by 1–3 spaces/dashes with at least 13 digits (cheap
+// bounded lookahead); card spans are picked inside it.
+const CARD_RE = /(?<![A-Za-z0-9])(?=\d(?:[ -]{0,3}\d){12})\d+(?:[ -]{1,3}\d+)*(?![A-Za-z0-9])/g;
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const PHONE_E164_RE = /(?<![\w])\+[1-9](?:[\s-]*\d){6,14}(?![\d])/g;
 const PHONE_NANP_RE = /(?<![\w])(?:\+?1[\s-]?)?\(?\d{3}\)?[\s-]\d{3}[\s-]\d{4}(?![\d])/g;
@@ -107,7 +111,12 @@ const IPV4_RE = /(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?!\w|\.\d)/g;
 const IPV6_RE = /(?<![\w:.])[0-9A-Fa-f:.]{2,45}(?![\w:.])/g;
 const COOKIE_HEADER_RE = /\b(cookie|set-cookie)[ \t]*:[ \t]*[^\r\n]+/gi;
 const AUTHORIZATION_HEADER_RE = /\b(authorization)[ \t]*:[ \t]*[^\r\n]+/gi;
-const TOKEN_RE = /\S+/g;
+// `X-Api-Key:` and `X-…-Token:` header lines (at most 4 extra name segments keeps it linear).
+const SECRET_HEADER_RE = /\b(x-api-key|x-(?:[a-z0-9]+-){0,4}token)[ \t]*:[ \t]*[^\s'"]+/gi;
+// `scheme://user:pass@host`: only the user-info part is replaced, the scheme and host are kept.
+const URL_CREDENTIALS_RE = /:\/\/[^\s/?#@:]+:[^\s/?#@]*@/g;
+const URL_START_RE = /https?:\/\//gi;
+const SPACE_RE = /\s/g;
 
 function isLikelyCardNumber(digits: string): boolean {
   if (!passesLuhn(digits)) return false;
@@ -123,6 +132,7 @@ function isLikelyCardNumber(digits: string): boolean {
 /**
  * Find card numbers inside a run of digit groups such as "9 4111 1111 1111 1111 7".
  * Spans always cover whole groups and 13–19 digits; the longest valid span wins, left to right.
+ * In a span of several groups, every group except the last has at least 4 digits.
  * Work is bounded: at most 19 groups are combined per starting group.
  */
 function replaceCardSpans(match: string, placeholder: string): string {
@@ -141,6 +151,8 @@ function replaceCardSpans(match: string, placeholder: string): string {
     let digits = "";
     for (let j = i; j < groups.length; j++) {
       const g = groups[j] as { start: number; end: number; len: number };
+      // Grouped PANs (4-4-4-4, 4-6-5, …) never have a short inner group: "100 200 300 …" is not a card.
+      if (j > i && (groups[j - 1] as { len: number }).len < 4) break;
       count += g.len;
       if (count > 19) break;
       digits += match.slice(g.start, g.end);
@@ -158,7 +170,6 @@ function replaceCardSpans(match: string, placeholder: string): string {
 }
 
 function uuidRanges(text: string): Array<[number, number]> {
-  if (!/[0-9a-f]{8}-[0-9a-f]{4}-/i.test(text)) return [];
   const ranges: Array<[number, number]> = [];
   for (const m of text.matchAll(UUID_RE)) {
     ranges.push([m.index ?? 0, (m.index ?? 0) + m[0].length]);
@@ -246,11 +257,29 @@ export function compileBuiltIn(name: BuiltInDetectorName, cfg: DetectorConfig): 
         name,
         apply: (t) => {
           if (!/\d{4}/.test(t) && !/\d[ -]\d/.test(t)) return t;
-          const uuids = uuidRanges(t);
           return t.replace(CARD_RE, (m, offset: number) => {
+            if (m.length < 13) return m; // fewer than 13 characters cannot hold 13 digits
             const end = offset + m.length;
-            for (const [s, e] of uuids) if (offset < e && end > s) return m;
-            return replaceCardSpans(m, p.card);
+            // Only UUIDs overlapping this run matter, and they lie within 36 chars of it: one local
+            // scan per candidate run keeps the detector linear and skips the UUID scan for most text.
+            const from = Math.max(0, offset - 36);
+            const uuids = uuidRanges(t.slice(from, end + 36)).map(([s, e]): [number, number] => [
+              s + from,
+              e + from,
+            ]);
+            // Scrub only the parts of the run outside UUIDs, so a card next to a UUID is still found.
+            let out = "";
+            let pos = offset;
+            for (const [s, e] of uuids) {
+              if (e <= pos) continue;
+              if (s >= end) break;
+              if (s > pos) out += replaceCardSpans(t.slice(pos, s), p.card);
+              out += t.slice(Math.max(s, pos), Math.min(e, end));
+              pos = Math.min(e, end);
+            }
+            return pos === offset
+              ? replaceCardSpans(m, p.card)
+              : out + replaceCardSpans(t.slice(pos, end), p.card);
           });
         },
       };
@@ -299,14 +328,42 @@ export function compileBuiltIn(name: BuiltInDetectorName, cfg: DetectorConfig): 
         name,
         apply: (t) => t.replace(AUTHORIZATION_HEADER_RE, (_m, header: string) => `${header}: ${p.bearer}`),
       };
+    case "secretHeader":
+      return {
+        name,
+        apply: (t) =>
+          /x-/i.test(t)
+            ? t.replace(
+                SECRET_HEADER_RE,
+                (_m, header: string) => `${header}: ${/key$/i.test(header) ? p.apiKey : p.token}`,
+              )
+            : t,
+      };
+    case "urlCredentials":
+      return {
+        name,
+        apply: (t) => (t.includes("://") ? t.replace(URL_CREDENTIALS_RE, () => `://${p.redacted}@`) : t),
+      };
     case "urlQuery": {
       const sensitiveQueryRe = new RegExp(`[?&](?:${namesAlternation([...cfg.secretNames, "key"])})=`, "i");
       return {
         name,
-        apply: (t) =>
-          /https?:\/\//i.test(t)
-            ? t.replace(TOKEN_RE, (tok) => stripUrlQueryInToken(tok, sensitiveQueryRe))
-            : t,
+        apply: (t) => {
+          // Visit only the whitespace-free tokens that contain a URL. Linear: each char is seen O(1) times.
+          let out = "";
+          let pos = 0;
+          URL_START_RE.lastIndex = 0;
+          for (let m = URL_START_RE.exec(t); m; m = URL_START_RE.exec(t)) {
+            let start = m.index;
+            while (start > pos && !/\s/.test(t[start - 1] as string)) start -= 1;
+            SPACE_RE.lastIndex = m.index;
+            const end = SPACE_RE.exec(t)?.index ?? t.length;
+            out += t.slice(pos, start) + stripUrlQueryInToken(t.slice(start, end), sensitiveQueryRe);
+            pos = end;
+            URL_START_RE.lastIndex = end;
+          }
+          return pos === 0 ? t : out + t.slice(pos);
+        },
       };
     }
     case "contextId": {

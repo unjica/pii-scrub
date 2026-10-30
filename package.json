@@ -1,6 +1,6 @@
 {
   "name": "@tacko/pii-scrub",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Zero-dependency, best-effort scrubbing of emails, tokens, API keys, card numbers, phones and other secrets from logs, telemetry payloads and Error objects.",
   "license": "MIT",
   "author": "Sanja Malovic (https://github.com/unjica)",
@@ -63,6 +63,9 @@
     "@types/node": "^22.10.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.7"
+    "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }
