@@ -12,6 +12,8 @@ const fill = (unit: string, prefix = "", suffix = ""): string =>
   prefix + unit.repeat(Math.ceil((SIZE - prefix.length - suffix.length) / unit.length)) + suffix;
 
 const ADVERSARIAL: Record<BuiltInDetectorName, string[]> = {
+  urlCredentials: [fill("a"), fill("a", "http://"), fill("a:", "http://"), fill("http://a:"), fill("a://")],
+  secretHeader: [fill("x-"), fill("x-a-"), fill("a-", "x-"), fill(" ", "x-api-key:"), fill("X-Token:")],
   email: [
     fill("a"),
     `${fill("a.")}@`,
