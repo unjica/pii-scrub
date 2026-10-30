@@ -1,5 +1,6 @@
 /** Names of the built-in free-text detectors, in the order they run. */
 export type BuiltInDetectorName =
+  | "urlCredentials"
   | "email"
   | "jwt"
   | "bearer"
@@ -14,6 +15,7 @@ export type BuiltInDetectorName =
   | "jsonSecret"
   | "cookieHeader"
   | "authorizationHeader"
+  | "secretHeader"
   | "urlQuery"
   | "contextId";
 
@@ -80,6 +82,17 @@ export interface ScrubOptions {
   secretNames?: readonly string[];
   /** Key names whose UUID value becomes a correlation id (`user_id=[id:1]`). Replaces the default list. */
   contextIdNames?: readonly string[];
+  /**
+   * What happens past `maxDepth`/`maxNodes`:
+   * - `"truncate"` (default): containers past the limit become the `truncated` placeholder
+   * - `"scrub"`: the limits are soft; traversal continues and still scrubs strings and sensitive
+   *   keys, up to the hard caps `hardMaxDepth`/`hardMaxNodes`, after which containers are truncated
+   */
+  onLimit?: "truncate" | "scrub";
+  /** Hard node cap for `onLimit: "scrub"`. Default 10 000 (or `maxNodes` if larger). */
+  hardMaxNodes?: number;
+  /** Hard depth cap for `onLimit: "scrub"`. Default 128 (or `maxDepth` if larger). */
+  hardMaxDepth?: number;
   /** Maximum nesting depth for objects/arrays/errors. Deeper containers become the `truncated` placeholder. Default 32. */
   maxDepth?: number;
   /**
