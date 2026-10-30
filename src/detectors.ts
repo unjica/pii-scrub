@@ -84,8 +84,8 @@ const API_KEY_RE = new RegExp(
   "(?<![A-Za-z0-9_])(?:" +
     [
       "(?:sk|pk)-[A-Za-z0-9_-]{16,}", // OpenAI/Anthropic-style and generic sk-/pk- keys
-      "(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}", // Stripe
-      "whsec_[A-Za-z0-9]{16,}", // Stripe webhook secret
+      "(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{8,}", // Stripe (test/restricted keys can be short)
+      "whsec_[A-Za-z0-9]{8,}", // Stripe webhook secret
       "gh[pousr]_[A-Za-z0-9]{36,}", // GitHub tokens
       "github_pat_[A-Za-z0-9_]{22,}", // GitHub fine-grained PAT
       "glpat-[A-Za-z0-9_-]{20,}", // GitLab PAT
